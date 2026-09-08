@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>자금집행</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1 data-i18n="appTitle">자금집행</h1>
+  <div style="display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
+    <nav class="nav-links">
+      <a href="index.html" data-i18n="backBtn">← 뒤로</a>
+    </nav>
+    <div class="lang-switch">
+      <button class="lang-btn" data-lang="ko">한국어</button>
+      <button class="lang-btn" data-lang="zh">中文</button>
+    </div>
+  </div>
+</header>
+<main>
+  <div class="card">
+    <div class="context-bar" id="contextBar"></div>
+    <div class="note-box" id="poolingBanner" style="display:none;" data-i18n="poolingBanner"></div>
+
+    <h2 data-i18n="cashHeading" style="font-size:18px;"></h2>
+    <div class="metric-cards">
+      <div class="metric-card"><div class="label" data-i18n="beginningCny"></div><div class="value" id="beginningCny">-</div></div>
+      <div class="metric-card"><div class="label" data-i18n="cfNetChangeCny"></div><div class="value" id="cfNetChangeCny">-</div></div>
+      <div class="metric-card"><div class="label" data-i18n="endingCny"></div><div class="value" id="endingCny">-</div></div>
+    </div>
+    <p class="desc" id="cashManualNote" style="display:none;" data-i18n="cashManualNote"></p>
+
+    <h3 data-i18n="trendHeading" style="font-size:15px; margin-top:22px;"></h3>
+    <div class="table-wrap">
+      <table class="exp-table" id="trendTable">
+        <thead>
+          <tr>
+            <th data-i18n="colMonth"></th>
+            <th data-i18n="colEndingCny"></th>
+            <th data-i18n="colChangeCny"></th>
+            <th data-i18n="colChangePct"></th>
+          </tr>
+        </thead>
+        <tbody id="trendBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="loansHeading" style="font-size:18px;"></h2>
+    <div class="table-wrap">
+      <table class="exp-table" id="loansTable">
+        <thead>
+          <tr>
+            <th data-i18n="colPrincipal"></th>
+            <th data-i18n="colBalance"></th>
+            <th data-i18n="colInterestRate"></th>
+            <th data-i18n="colStartDate"></th>
+            <th data-i18n="colMaturityDate"></th>
+            <th data-i18n="colNote"></th>
+          </tr>
+        </thead>
+        <tbody id="loansBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="dividendHeading" style="font-size:18px;"></h2>
+    <p class="desc" data-i18n="dividendDesc"></p>
+    <div class="metric-cards">
+      <div class="metric-card"><div class="label" data-i18n="dividendHeading"></div><div class="value" id="dividendValue">-</div></div>
+    </div>
+  </div>
+</main>
+<footer>자금집행 · China Branch Fund Monitoring</footer>
+<div class="toast" id="toast"></div>
+
+<script src="js/config.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/common.js"></script>
+<script src="js/app-view.js"></script>
+</body>
+</html>

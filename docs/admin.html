@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>자금집행</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1 data-i18n="appTitle">자금집행</h1>
+  <div style="display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
+    <nav class="nav-links">
+      <a href="index.html" data-i18n="backBtn">← 뒤로</a>
+    </nav>
+    <div class="lang-switch">
+      <button class="lang-btn" data-lang="ko">한국어</button>
+      <button class="lang-btn" data-lang="zh">中文</button>
+    </div>
+  </div>
+</header>
+<main>
+  <div class="card">
+    <h2 data-i18n="adminHeading"></h2>
+    <p class="desc" data-i18n="adminDesc"></p>
+    <div class="form-grid">
+      <div>
+        <label data-i18n="adminKeyLabel"></label>
+        <input type="password" id="adminKey">
+      </div>
+      <div>
+        <label data-i18n="adminCorp"></label>
+        <select id="adminCorp"></select>
+      </div>
+      <div>
+        <label data-i18n="adminYm"></label>
+        <select id="adminYm"></select>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" id="fetchBtn" data-i18n="adminFetch"></button>
+    </div>
+    <div class="note-box" id="poolingBanner" style="display:none;" data-i18n="poolingBanner"></div>
+
+    <h3 data-i18n="cashHeading" style="font-size:15px; margin-top:22px;"></h3>
+    <div class="metric-cards">
+      <div class="metric-card"><div class="label" data-i18n="beginningCny"></div><div class="value" id="beginningCny">-</div></div>
+      <div class="metric-card"><div class="label" data-i18n="cfNetChangeCny"></div><div class="value" id="cfNetChangeCny">-</div></div>
+    </div>
+    <div class="form-grid">
+      <div>
+        <label data-i18n="endingCny"></label>
+        <input type="number" step="0.01" id="endingInput">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" id="saveCashBtn" data-i18n="cashSaveBtn"></button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="loansHeading" style="font-size:18px;"></h2>
+    <div class="table-wrap">
+      <table class="exp-table" id="loansTable">
+        <thead>
+          <tr>
+            <th data-i18n="colPrincipal"></th>
+            <th data-i18n="colBalance"></th>
+            <th data-i18n="colInterestRate"></th>
+            <th data-i18n="colStartDate"></th>
+            <th data-i18n="colMaturityDate"></th>
+            <th data-i18n="colNote"></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="loansBody"></tbody>
+      </table>
+    </div>
+    <div class="btn-row">
+      <button class="btn-secondary" id="addLoanBtn" data-i18n="loanAddBtn"></button>
+    </div>
+    <div class="card" id="loanForm" style="display:none; background:#f7f9fb; margin-top:14px;">
+      <input type="hidden" id="loanId">
+      <div class="form-grid">
+        <div><label data-i18n="colPrincipal"></label><input type="number" step="0.01" id="loanPrincipal"></div>
+        <div><label data-i18n="colBalance"></label><input type="number" step="0.01" id="loanBalance"></div>
+        <div><label data-i18n="colInterestRate"></label><input type="number" step="0.01" id="loanRate"></div>
+        <div><label data-i18n="colStartDate"></label><input type="date" id="loanStart"></div>
+        <div><label data-i18n="colMaturityDate"></label><input type="date" id="loanMaturity"></div>
+        <div><label data-i18n="colNote"></label><input type="text" id="loanNote"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="loanSaveBtn" data-i18n="loanSaveBtn"></button>
+        <button class="btn-secondary" id="loanCancelBtn" data-i18n="loanCancelBtn"></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="dividendHeading" style="font-size:18px;"></h2>
+    <div class="metric-cards">
+      <div class="metric-card"><div class="label" data-i18n="dividendHeading"></div><div class="value" id="dividendValue">-</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="aggHeading" style="font-size:18px;"></h2>
+    <div class="table-wrap">
+      <table class="exp-table" id="aggTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th data-i18n="colCorp"></th>
+            <th data-i18n="endingCny"></th>
+            <th data-i18n="colBalance"></th>
+            <th data-i18n="dividendHeading"></th>
+          </tr>
+        </thead>
+        <tbody id="aggBody"></tbody>
+      </table>
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" id="downloadBtn" data-i18n="adminDownload"></button>
+    </div>
+  </div>
+</main>
+<footer>자금집행 · China Branch Fund Monitoring</footer>
+<div class="toast" id="toast"></div>
+
+<script src="js/config.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/common.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="js/app-admin.js"></script>
+</body>
+</html>
