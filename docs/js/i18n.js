@@ -3,6 +3,7 @@ window.I18N = {
     appTitle: "자금집행 - 중국법인 자금현황 모니터링 시스템",
     langName: "한국어",
     navAdmin: "본사용: 관리자 화면",
+    navDashboard: "← 통합 대시보드",
     backBtn: "← 뒤로",
 
     indexHeading: "자금현황 조회",
@@ -79,6 +80,7 @@ window.I18N = {
     appTitle: "资金执行 - 中国法人资金状况监控系统",
     langName: "中文",
     navAdmin: "总部用：管理员页面",
+    navDashboard: "← 综合仪表盘",
     backBtn: "← 返回",
 
     indexHeading: "资金状况查询",
