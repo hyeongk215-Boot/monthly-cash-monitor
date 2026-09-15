@@ -80,7 +80,7 @@ window.I18N = {
     appTitle: "资金执行 - 中国法人资金状况监控系统",
     langName: "中文",
     navAdmin: "总部用：管理员页面",
-    navDashboard: "← 综合仪表盘",
+    navDashboard: "← 开始页面",
     backBtn: "← 返回",
 
     indexHeading: "资金状况查询",
