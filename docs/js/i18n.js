@@ -6,6 +6,13 @@ window.I18N = {
     navDashboard: "← 통합 대시보드",
     backBtn: "← 뒤로",
 
+    moduleName: "자금집행",
+    navSecMain: "조회",
+    navSecAdmin: "관리",
+    navQuery: "자금현황 조회",
+    navCash: "자금 현황",
+    navAdminShort: "관리자 화면",
+
     indexHeading: "자금현황 조회",
     indexDesc: "법인/적용년도월과 접근키를 입력하면 해당 법인의 보유시재·차입금·배당가능금액을 조회할 수 있습니다.",
     corp: "법인",
@@ -82,6 +89,13 @@ window.I18N = {
     navAdmin: "总部用：管理员页面",
     navDashboard: "← 开始页面",
     backBtn: "← 返回",
+
+    moduleName: "资金执行",
+    navSecMain: "查询",
+    navSecAdmin: "管理",
+    navQuery: "资金状况查询",
+    navCash: "资金状况",
+    navAdminShort: "管理员页面",
 
     indexHeading: "资金状况查询",
     indexDesc: "请填写法人/适用年月及接入密钥，即可查询该法人的库存资金、借款及可分配利润。",
