@@ -225,6 +225,22 @@ table.exp-table input[type=text] { min-width: 110px; }
 footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px; }
 .key-gate { max-width: 480px; margin: 60px auto; }
 
+/* ===== 자금 대사(對査) 표 =====
+   "기초 + CF순증감 = 기말"이 안 맞는 행을 눈에 띄게 합니다. 이 불일치 자체가
+   자금집행 모듈이 찾으려는 이상징후라서, 표에서 가장 먼저 보여야 합니다. */
+.recon-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.recon-table td.name { text-align: left; white-space: nowrap; }
+.recon-table tr.recon-bad td { background: var(--danger-bg); }
+.recon-table tr.recon-bad:hover td { background: var(--danger-bg); }
+.recon-table tr.recon-office td.name { padding-left: 26px; color: var(--muted); font-size: 12.5px; }
+.recon-table tr.recon-office td { background: var(--surface-2); }
+.recon-table tr.recon-office.recon-bad td { background: var(--danger-bg); }
+.diff-ok { color: var(--ok); font-weight: 600; }
+.diff-bad { color: var(--danger); font-weight: 600; }
+.diff-na { color: var(--muted); }
+/* 숫자 밑에 출처를 작게 적습니다 (예: "전월 BS" / "CF-56") */
+.src-tag { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+
 /* ===== 기간 토글 (실적분석/자금집행 공통) ===== */
 .period-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; width: fit-content; margin-bottom: 18px; }
 .period-btn {
@@ -253,7 +269,7 @@ tr.subtotal-row input { font-weight: 700; background: var(--surface-2); }
   .card { padding: 16px; }
 }
 
-/* ===== 자금집행 전용: 시재 카드 / 추이 화살표 ===== */
+/* ===== 지표 카드 (자금집행/통합시스템/실적분석 공통) ===== */
 .metric-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 18px; }
 .metric-card {
   background: var(--card); border: 1px solid var(--border);
@@ -261,6 +277,8 @@ tr.subtotal-row input { font-weight: 700; background: var(--surface-2); }
 }
 .metric-card .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 .metric-card .value { font-size: 21px; font-weight: 700; }
+
+/* ===== 자금집행 전용: 추이 화살표 ===== */
 .trend-up { color: var(--danger); }
 .trend-down { color: var(--primary); }
 .trend-flat { color: var(--muted); }

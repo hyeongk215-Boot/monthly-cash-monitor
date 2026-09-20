@@ -1,72 +1,55 @@
--- Supabase 마이그레이션: 자금집행 (중국법인 자금 이상징후 모니터링)
--- 사용법: Supabase 대시보드 > SQL Editor > New query 에 이 파일 전체를 붙여넣고 실행하세요.
+-- =====================================================================
+-- 자금집행 마이그레이션 (2026-09): BS·CF 연결 + 배당가능금액 역산
+-- =====================================================================
 --
--- ⚠ 전제조건: 회계관리(E:\Claude Code\관리 ERP 시스템\회계관리\supabase\schema.sql)가 이미
--- 같은 Supabase 프로젝트에 적용되어 있어야 합니다. 이 파일은 회계관리가 만든 공용/참조 객체를
--- 재사용합니다 (다시 만들지 않음): access_keys, verify_access_key(), acct_accounts, acct_statement_lines.
--- 이 모듈의 목적은 "자금 집행 계획"이 아니라 "자금 이상징후 감지"입니다 — 고정 임계치로 자동
--- 경고하지 않고, 추이 데이터만 제공해서 사람이 판단하도록 설계했습니다.
--- 자금집행 전용 테이블/함수는 전부 fund_ 접두사를 씁니다.
+-- ⚠ SQL Editor에서 **New query**로 열어 이 파일 전체를 붙여넣고 실행하세요.
+--   저장해둔 예전 스니펫을 재실행하면 옛 함수 본문이 그대로 올라갑니다.
+--
+-- 이 파일은 함수만 교체/추가합니다. 테이블은 만들지도 지우지도 않고,
+-- fund_cash_positions / fund_loans / acct_statement_lines 에 이미 들어간
+-- 데이터는 한 줄도 건드리지 않습니다.
+--
+-- ---------------------------------------------------------------------
+-- 왜 바꾸는가
+-- ---------------------------------------------------------------------
+-- 1) CF 순증감이 "유입 + 유출"이었습니다.
+--    종전 get_cash_position은 is_subtotal=false인 CF 계정을 전부 더했습니다.
+--    그런데 중국 현금흐름표 양식에서 지급현금(支付的...现金) 계정은 양수로 적습니다
+--    (부호가 아니라 '减:' 라벨이 차감을 표현). 그래서 유입과 유출이 상계되지 않고
+--    전부 더해졌습니다. 게다가 CF-57~60(기말/기초 잔액)은 흐름이 아니라 잔액인데
+--    is_subtotal=false라 같이 더해졌고, 정작 정답인 CF-56(현금및현금성자산 순증가액)은
+--    is_subtotal=true라서 제외되고 있었습니다.
+--    → CF-56을 주값으로 쓰고, 유입−유출+환율을 검산값으로 따로 계산합니다.
+--
+-- 2) 기초잔액이 본사 수기 입력에만 의존했습니다.
+--    fund_cash_positions는 set_cash_position(본사 전용)으로만 채워지므로, 본사가 전월에
+--    저장한 적이 없으면 기초가 0이었고 기말 = 기초 + CF 이라 그 이후 달이 연쇄적으로
+--    무너졌습니다.
+--    → 지점이 제출한 전월 BS의 현금성자산을 기초로 씁니다. 본사 수기값은 참고 표시만.
+--
+-- 3) 배당가능금액이 전 법인 0이었습니다.
+--    get_dividend_available이 'BS-R67'을 참조했는데, 회계관리 seed_accounts.sql v5가
+--    그 코드를 active=false로 비활성화했습니다(현재 미분배이익잉여금은 'BS-R55').
+--    존재하지 않는 계정이라 조회 결과가 NULL → coalesce(...,0) → 조용히 0.
+--    → 코드를 고치고, 같은 사고가 반복되지 않도록 계정이 없으면 0이 아니라
+--      accountMissing 플래그를 올려 화면이 눈치채게 합니다.
+--
+-- ---------------------------------------------------------------------
+-- 설계 원칙: 지점이 낸 숫자가 정답, 본사는 검증만
+-- ---------------------------------------------------------------------
+-- 회계 항등식 "전월말 현금 + 당월 순증감 = 당월말 현금"은 반드시 성립해야 합니다.
+-- 종전에는 좌변만 계산하고 우변(BS)과 맞춰보지 않아서, 틀려도 아무도 몰랐습니다.
+-- 이제 양변을 각각 지점 제출자료에서 뽑아 차이를 보여줍니다. 차이가 0이 아니면
+-- 그 자체가 이 모듈이 찾으려던 "자금 이상징후"입니다.
+--
+-- 입력 시간차(BS만 내고 CF는 아직)는 정상 상황이므로, 한쪽이 비면 차이를 0이 아니라
+-- null로 반환해 "미제출"과 "일치"를 구분합니다.
 
 -- =====================================================================
--- 자금집행 전용 테이블
+-- 0. 계정코드 상수 헬퍼
 -- =====================================================================
-
--- 월말 보유시재(본사 수기 확정값).
--- ⚠ 2026-09부터 이 값은 기초/기말잔액 계산에 쓰이지 않습니다. 잔액은 전부 지점이 제출한
---   BS/CF에서 뽑고, 이 테이블 값은 "본사가 다르게 확정했다"는 기록으로만 남습니다
---   (fund_reconcile_one의 manualEndingCny / manualDiffCny). 종전에는 이 값이 다음 달
---   기초잔액이었는데, 본사가 한 달이라도 저장을 건너뛰면 그 이후 모든 달의 기초가 0으로
---   떨어져 연쇄적으로 무너졌습니다. 기존 행은 이력이라 지우지 않고 그대로 둡니다.
-create table if not exists fund_cash_positions (
-  corp text not null,
-  yearmonth text not null,
-  ending_balance_cny numeric not null default 0,
-  is_manual boolean not null default false,
-  note text default '',
-  updated_by text,
-  updated_at timestamptz not null default now(),
-  primary key (corp, yearmonth)
-);
-alter table fund_cash_positions enable row level security;
-revoke all on fund_cash_positions from anon, authenticated;
-
--- 차입금 (본사 담당자가 관리, 지점은 조회만)
-create table if not exists fund_loans (
-  id bigint generated always as identity primary key,
-  corp text not null,
-  principal_cny numeric not null default 0,
-  balance_cny numeric not null default 0,
-  interest_rate numeric,
-  start_date text,
-  maturity_date text,
-  note text default '',
-  active boolean not null default true,
-  updated_by text,
-  updated_at timestamptz not null default now()
-);
-create index if not exists idx_fund_loans_corp on fund_loans(corp);
-alter table fund_loans enable row level security;
-revoke all on fund_loans from anon, authenticated;
-
--- =====================================================================
--- RPC 함수
--- =====================================================================
-
--- 전월(YYYY-MM) 문자열 계산 헬퍼
-create or replace function fund_prev_yearmonth(p_yearmonth text) returns text
-language sql immutable
-as $$
-  select to_char((to_date(p_yearmonth || '-01', 'YYYY-MM-DD') - interval '1 month'), 'YYYY-MM');
-$$;
-
--- =====================================================================
--- 계정코드 상수 + 집계 헬퍼
--- =====================================================================
--- 계정코드를 함수 본문 여기저기에 흩어두면 회계관리가 COA를 교체할 때 놓칩니다.
--- 실제로 2026-09에 그 사고가 났습니다: 배당가능금액이 'BS-R67'을 참조했는데
--- seed_accounts.sql v5가 그 코드를 active=false로 비활성화해서, 조회 결과가 NULL →
--- coalesce(...,0) → 전 법인이 조용히 0원으로 표시됐습니다. 그래서 한 군데로 모읍니다.
+-- 계정코드를 함수 본문 여기저기에 흩어두면 회계관리가 COA를 교체할 때 또 놓칩니다
+-- (이번 BS-R67 사고가 정확히 그것이었습니다). 한 군데로 모읍니다.
 
 create or replace function fund_account_codes() returns jsonb
 language sql immutable
@@ -93,20 +76,13 @@ as $$
   );
 $$;
 
-create or replace function fund_codes(p_key text) returns text[]
-language sql immutable
-as $$
-  select case jsonb_typeof(fund_account_codes()->p_key)
-           when 'array' then array(
-             select v from jsonb_array_elements_text(fund_account_codes()->p_key) as t(v)
-           )
-           else array[fund_account_codes()->>p_key]
-         end;
-$$;
-
--- "제출 안 됨"과 "제출했는데 0"을 구분하기 위해 sum()의 NULL을 그대로 돌려줍니다.
+-- =====================================================================
+-- 1. 집계 헬퍼
+-- =====================================================================
+-- 전부 "제출 안 됨"과 "제출했는데 0"을 구분하기 위해 sum()의 NULL을 그대로 돌려줍니다.
 -- coalesce(...,0)로 뭉개면 미제출 지점이 잔액 0인 법인처럼 보입니다.
 -- p_office가 null이면 법인 산하 전 지점 합계입니다.
+
 create or replace function fund_line_sum(
   p_corp text, p_office text, p_yearmonth text, p_type text, p_codes text[]
 ) returns numeric
@@ -135,23 +111,25 @@ as $$
   );
 $$;
 
+-- jsonb 배열 -> text[]
+create or replace function fund_codes(p_key text) returns text[]
+language sql immutable
+as $$
+  select case jsonb_typeof(fund_account_codes()->p_key)
+           when 'array' then array(
+             select v from jsonb_array_elements_text(fund_account_codes()->p_key) as t(v)
+           )
+           else array[fund_account_codes()->>p_key]
+         end;
+$$;
+
 -- =====================================================================
--- 자금 대사(對査) 계산 — 이 모듈의 핵심
+-- 2. 자금 대사(對査) 계산 — 이 모듈의 핵심
 -- =====================================================================
--- 회계 항등식 "전월말 현금 + 당월 순증감 = 당월말 현금"은 반드시 성립해야 합니다.
--- 2026-09 이전에는 좌변만 계산하고 우변(BS)과 맞춰보지 않아서, 틀려도 아무도 몰랐습니다.
--- 이제 양변을 각각 지점 제출자료에서 뽑아 차이를 보여줍니다. 차이가 0이 아니면 그 자체가
--- 이 모듈이 찾으려던 "자금 이상징후"입니다.
---
--- 입력 시간차(BS만 내고 CF는 아직)는 정상 상황이므로, 한쪽이 비면 차이를 0이 아니라
--- null로 반환해 "미제출"과 "일치"를 구분합니다.
---
--- ⚠ CF 순증감을 CF-56에서 읽는 이유:
---   2026-09 이전에는 is_subtotal=false인 CF 계정을 전부 더했습니다. 그런데 중국
---   현금흐름표 양식에서 지급현금(支付的...现金)은 양수로 적습니다 — 부호가 아니라 '减:'
---   라벨이 차감을 표현하기 때문입니다. 그래서 유입과 유출이 상계되지 않고 전부 더해져
---   "총 거래량"이 나왔습니다. 게다가 CF-57~60은 흐름이 아니라 잔액인데 is_subtotal=false라
---   같이 더해졌고, 정작 정답인 CF-56은 is_subtotal=true라서 제외되고 있었습니다.
+-- 한 (법인, 지점, 월)에 대해 기초·순증감·기말을 지점 제출자료에서 뽑고,
+-- 서로 맞는지까지 계산해서 한 덩어리로 돌려줍니다.
+-- get_cash_position / get_fund_reconciliation 이 둘 다 이 함수를 씁니다.
+
 create or replace function fund_reconcile_one(
   p_corp text, p_office text, p_yearmonth text
 ) returns jsonb
@@ -265,7 +243,12 @@ begin
 end;
 $$;
 
--- 법인 1곳의 보유시재 현황 조회 (지점은 자기 법인만, 본사는 지정 법인)
+-- =====================================================================
+-- 3. get_cash_position 교체
+-- =====================================================================
+-- 시그니처와 기존 응답 키를 그대로 유지하므로, 이 SQL만 올려도 현재 화면이 깨지지 않고
+-- 숫자만 정확해집니다. 산출근거 키는 화면이 준비되는 대로 쓰면 됩니다.
+
 create or replace function get_cash_position(
   p_access_key text,
   p_corp text,
@@ -289,13 +272,17 @@ begin
 end;
 $$;
 
--- 관리자용 산출근거 표: 전 법인 + 지점별 내역 + 검증결과를 한 번에.
+-- =====================================================================
+-- 4. 관리자용 산출근거 표
+-- =====================================================================
 -- 종전 관리자 화면은 법인별로 get_cash_position + get_dividend_available를 각각 호출해서
 -- 법인 수 × 2회를 왕복했고, 정작 "이 숫자가 어떻게 나왔는지"는 보여주지 않았습니다.
+-- 이 함수 하나로 전 법인 + 지점별 내역 + 검증결과를 한 번에 받습니다.
 --
--- p_corps: 화면의 config.js CORPORATIONS 목록을 그대로 넘깁니다. DB에 법인 목록을 중복
---          정의하지 않으려는 것이고, 아직 한 건도 제출하지 않은 법인도 표에 "미제출"로
---          나오게 하기 위해서입니다. null이면 데이터에 있는 법인만 잡습니다.
+-- p_corps: 화면의 config.js CORPORATIONS 목록을 그대로 넘깁니다. DB에 법인 목록을
+--          중복 정의하지 않으려는 것이고, 아직 한 건도 제출하지 않은 법인도 표에
+--          "미제출"로 나오게 하기 위해서입니다. null이면 데이터에 있는 법인만 잡습니다.
+
 create or replace function get_fund_reconciliation(
   p_access_key text,
   p_yearmonth text,
@@ -350,160 +337,8 @@ begin
 end;
 $$;
 
--- 보유시재 확정/수정 (system_admin/finance 전용).
--- 참고용 기록입니다. 다음 달 기초잔액은 이 값이 아니라 지점이 제출한 BS에서 나옵니다.
-create or replace function set_cash_position(
-  p_access_key text,
-  p_corp text,
-  p_yearmonth text,
-  p_ending_balance_cny numeric,
-  p_note text
-) returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_role text;
-begin
-  select role into v_role from verify_access_key(p_access_key);
-  if v_role not in ('system_admin', 'finance') then
-    raise exception 'unauthorized';
-  end if;
-  if p_corp is null or p_yearmonth is null or p_ending_balance_cny is null then
-    raise exception 'invalid_payload';
-  end if;
-
-  insert into fund_cash_positions (corp, yearmonth, ending_balance_cny, is_manual, note, updated_by, updated_at)
-  values (p_corp, p_yearmonth, p_ending_balance_cny, true, coalesce(p_note, ''), v_role, now())
-  on conflict (corp, yearmonth) do update
-    set ending_balance_cny = excluded.ending_balance_cny, is_manual = true,
-        note = excluded.note, updated_by = excluded.updated_by, updated_at = now();
-end;
-$$;
-
--- 차입금 조회 (지점은 자기 법인만, 본사는 지정 법인)
-create or replace function get_loans(
-  p_access_key text,
-  p_corp text
-) returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_role text;
-  v_branch_scope text;
-  v_corp text;
-begin
-  select role, branch_scope into v_role, v_branch_scope from verify_access_key(p_access_key);
-  v_corp := coalesce(v_branch_scope, p_corp);
-
-  return coalesce((
-    select jsonb_agg(to_jsonb(x) order by x."maturityDate" nulls last)
-    from (
-      select id, corp, principal_cny as "principalCny", balance_cny as "balanceCny",
-             interest_rate as "interestRate", start_date as "startDate", maturity_date as "maturityDate", note
-      from fund_loans where corp = v_corp and active = true
-    ) x
-  ), '[]'::jsonb);
-end;
-$$;
-
--- 전체 법인 차입금 조회 (system_admin/finance 전용)
-create or replace function get_loans_aggregate(p_access_key text) returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_role text;
-begin
-  select role into v_role from verify_access_key(p_access_key);
-  if v_role not in ('system_admin', 'finance') then
-    raise exception 'unauthorized';
-  end if;
-
-  return coalesce((
-    select jsonb_agg(to_jsonb(x) order by x.corp, x."maturityDate" nulls last)
-    from (
-      select id, corp, principal_cny as "principalCny", balance_cny as "balanceCny",
-             interest_rate as "interestRate", start_date as "startDate", maturity_date as "maturityDate", note
-      from fund_loans where active = true
-    ) x
-  ), '[]'::jsonb);
-end;
-$$;
-
--- 차입금 등록/수정 (system_admin/finance 전용). p_loan.id가 있으면 수정, 없으면 신규.
-create or replace function upsert_loan(
-  p_access_key text,
-  p_loan jsonb
-) returns bigint
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_role text;
-  v_id bigint;
-begin
-  select role into v_role from verify_access_key(p_access_key);
-  if v_role not in ('system_admin', 'finance') then
-    raise exception 'unauthorized';
-  end if;
-
-  v_id := nullif(p_loan->>'id', '')::bigint;
-
-  if v_id is null then
-    insert into fund_loans (corp, principal_cny, balance_cny, interest_rate, start_date, maturity_date, note, updated_by, updated_at)
-    values (
-      p_loan->>'corp',
-      coalesce(nullif(p_loan->>'principalCny', '')::numeric, 0),
-      coalesce(nullif(p_loan->>'balanceCny', '')::numeric, 0),
-      nullif(p_loan->>'interestRate', '')::numeric,
-      p_loan->>'startDate', p_loan->>'maturityDate', coalesce(p_loan->>'note', ''),
-      v_role, now()
-    )
-    returning id into v_id;
-  else
-    update fund_loans set
-      corp = p_loan->>'corp',
-      principal_cny = coalesce(nullif(p_loan->>'principalCny', '')::numeric, 0),
-      balance_cny = coalesce(nullif(p_loan->>'balanceCny', '')::numeric, 0),
-      interest_rate = nullif(p_loan->>'interestRate', '')::numeric,
-      start_date = p_loan->>'startDate',
-      maturity_date = p_loan->>'maturityDate',
-      note = coalesce(p_loan->>'note', ''),
-      updated_by = v_role, updated_at = now()
-    where id = v_id;
-  end if;
-
-  return v_id;
-end;
-$$;
-
-create or replace function delete_loan(
-  p_access_key text,
-  p_id bigint
-) returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_role text;
-begin
-  select role into v_role from verify_access_key(p_access_key);
-  if v_role not in ('system_admin', 'finance') then
-    raise exception 'unauthorized';
-  end if;
-  update fund_loans set active = false, updated_by = v_role, updated_at = now() where id = p_id;
-end;
-$$;
-
 -- =====================================================================
--- 배당가능금액 — 기준시점 + 역산
+-- 5. 배당가능금액 — 기준시점 + 역산
 -- =====================================================================
 -- 배당 결의는 직전 사업연도말(예: 2025-12) 이익잉여금이 기준입니다. 그런데 이 시스템은
 -- 2024-01부터를 담도록 만들어졌을 뿐 실제 입력은 나중에 시작됐기 때문에, 기준월 BS가
@@ -520,9 +355,7 @@ $$;
 --       (R55+R54) − PL누계 = 전전년말 + 전년이익 = 전년말  ✓
 -- 어느 상태인지 몰라도 답이 같으므로, 회사마다 다른 결산 관행에 영향을 받지 않습니다.
 -- 판별 결과는 carryForward 필드로 같이 돌려주니 사람이 눈으로 확인할 수 있습니다.
---
--- ⚠ 법정잉여공적금(10%, 자본금 50% 도달까지) 차감은 아직 적용하지 않습니다. 판정에 필요한
---   납입자본금·잉여공적금은 참고값으로 같이 반환하니, 2단계에서 차감식을 넣을 때 씁니다.
+
 create or replace function get_dividend_detail(
   p_access_key text,
   p_corp text,
@@ -546,8 +379,8 @@ begin
 
   v_base := coalesce(p_base_yearmonth, to_char(now() - interval '1 year', 'YYYY') || '-12');
 
-  -- 참조 계정이 실제로 살아 있는지 먼저 확인합니다. BS-R67 사고처럼 COA가 교체되어 계정이
-  -- 사라졌을 때, 0을 보여주는 대신 화면이 경고할 수 있게 합니다.
+  -- 참조 계정이 실제로 살아 있는지 먼저 확인합니다. 이번 BS-R67 사고처럼 COA가 교체되어
+  -- 계정이 사라졌을 때, 0을 보여주는 대신 화면이 경고할 수 있게 합니다.
   select not exists (
     select 1 from acct_accounts
      where statement_type = 'BS' and active = true
@@ -605,6 +438,7 @@ begin
 
   v_total := coalesce(v_retained, 0) + coalesce(v_net, 0) - coalesce(v_pl_cum, 0);
 
+  -- 법정적립 판정에 필요한 참고값 (차감은 아직 적용하지 않습니다 - 2단계)
   v_capital := fund_line_sum(v_corp, null, v_src, 'BS', fund_codes('bsCapital'));
   v_surplus := fund_line_sum(v_corp, null, v_src, 'BS', fund_codes('bsSurplus'));
 
@@ -653,7 +487,7 @@ end;
 $$;
 
 -- =====================================================================
--- 권한
+-- 6. 권한
 -- =====================================================================
 -- 헬퍼(fund_line_sum 등)는 access_key 검사를 하지 않으므로 절대 노출하지 않습니다.
 -- 이미 revoke된 acct_statement_lines를 읽기 때문에, 노출하면 키 없이 재무제표를
@@ -666,10 +500,19 @@ revoke all on function fund_reconcile_one(text, text, text) from anon, authentic
 
 grant execute on function get_cash_position(text, text, text) to anon, authenticated;
 grant execute on function get_fund_reconciliation(text, text, text[]) to anon, authenticated;
-grant execute on function set_cash_position(text, text, text, numeric, text) to anon, authenticated;
-grant execute on function get_loans(text, text) to anon, authenticated;
-grant execute on function get_loans_aggregate(text) to anon, authenticated;
-grant execute on function upsert_loan(text, jsonb) to anon, authenticated;
-grant execute on function delete_loan(text, bigint) to anon, authenticated;
 grant execute on function get_dividend_detail(text, text, text) to anon, authenticated;
 grant execute on function get_dividend_available(text, text, text) to anon, authenticated;
+
+-- =====================================================================
+-- 7. 배포 확인
+-- =====================================================================
+-- 아래를 실행해 전부 true가 나오면 이 파일이 올라간 것입니다.
+--
+--   select
+--     (select prosrc like '%CF-56%'  from pg_proc where proname = 'fund_account_codes')  as cf56_ok,
+--     (select prosrc like '%BS-R55%' from pg_proc where proname = 'fund_account_codes')  as bsr55_ok,
+--     (select prosrc not like '%BS-R67%' from pg_proc where proname = 'get_dividend_available') as r67_removed,
+--     (select count(*) from pg_proc where proname = 'get_fund_reconciliation')            as recon_added;
+--
+-- ⚠ 세 번째 r67_removed는 "없어야 정상"이라 true가 기대값입니다. 옛 함수가 남아 있으면
+--   false가 나옵니다. 값이 아니라 조건 방향에 주의하세요.

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>자금집행</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=202609201335">
 <script>document.documentElement.setAttribute("data-theme", localStorage.getItem("erpTheme") === "dark" ? "dark" : "light");</script>
 </head>
 <body>
@@ -120,9 +120,56 @@
   </div>
 
   <div class="card">
+    <h2 data-i18n="reconHeading" style="font-size:18px;"></h2>
+    <p class="desc" data-i18n="reconDesc"></p>
+    <div class="table-wrap">
+      <table class="exp-table recon-table" id="reconTable">
+        <thead>
+          <tr>
+            <th data-i18n="colCorp"></th>
+            <th data-i18n="beginningCny"></th>
+            <th data-i18n="colCfNet"></th>
+            <th data-i18n="colComputedEnding"></th>
+            <th data-i18n="colBsEnding"></th>
+            <th data-i18n="colDiffIdentity"></th>
+            <th data-i18n="colDiffOpening"></th>
+            <th data-i18n="colDiffEnding"></th>
+            <th data-i18n="colStatus"></th>
+          </tr>
+        </thead>
+        <tbody id="reconBody"></tbody>
+      </table>
+    </div>
+    <p class="desc" style="margin-top:12px; margin-bottom:0;" data-i18n="reconHint"></p>
+  </div>
+
+  <div class="card">
     <h2 data-i18n="dividendHeading" style="font-size:18px;"></h2>
-    <div class="metric-cards">
+    <p class="desc" data-i18n="dividendDesc"></p>
+    <div class="form-grid">
+      <div>
+        <label data-i18n="dividendBase"></label>
+        <select id="dividendBase"></select>
+      </div>
+    </div>
+    <div class="metric-cards" style="margin-top:14px;">
       <div class="metric-card"><div class="label" data-i18n="dividendHeading"></div><div class="value" id="dividendValue">-</div></div>
+    </div>
+    <div class="note-box" id="dividendNote" style="display:none;"></div>
+    <div class="table-wrap" style="margin-top:14px;">
+      <table class="exp-table recon-table" id="dividendTable">
+        <thead>
+          <tr>
+            <th data-i18n="colCorp"></th>
+            <th data-i18n="dividendRetained"></th>
+            <th data-i18n="dividendNetIncome"></th>
+            <th data-i18n="dividendPlCum"></th>
+            <th data-i18n="dividendHeading"></th>
+            <th data-i18n="dividendSource"></th>
+          </tr>
+        </thead>
+        <tbody id="dividendBody"></tbody>
+      </table>
     </div>
   </div>
 
@@ -152,11 +199,11 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="js/config.js"></script>
+<script src="js/config.js?v=202609201335"></script>
 <script src="vendor/supabase.js"></script>
-<script src="js/i18n.js"></script>
-<script src="js/common.js"></script>
+<script src="js/i18n.js?v=202609201335"></script>
+<script src="js/common.js?v=202609201335"></script>
 <script src="vendor/xlsx.full.min.js"></script>
-<script src="js/app-admin.js"></script>
+<script src="js/app-admin.js?v=202609201335"></script>
 </body>
 </html>
