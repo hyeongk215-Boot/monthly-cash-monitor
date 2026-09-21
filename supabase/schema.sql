@@ -603,15 +603,17 @@ begin
     v_carry := 'not_carried';  -- 아직 결전 전
   end if;
 
-  -- ⚠ BS-R55(未分配利润)는 BS-R54(本年利润)를 이미 포함합니다. 예전에는 둘을 더했는데
-  -- 그러면 당해 이익이 두 번 잡혀 배당가능금액이 과대계상됩니다 (흥아물류 2026-08 기준
-  -- 약 236만 CNY 과대). 실측 근거 — 자본총계(BS-R56)에서 구성항목을 뺀 잔차가
-  --   R54를 더한 경우 : -R54 와 거의 같음 (2026-08: -2,311,374 vs R54 2,368,460)
-  --   R54를 뺀 경우   : 0 에 가까움      (2026-08: 57,086)
-  -- 이므로 자본총계 항등식은 R48+R51+R52+R55 이고, R54는 R55에 흡수돼 있습니다.
-  -- 역산(backcast)에서 v_pl_cum을 빼는 건 그대로 둡니다. R55가 당해 이익을 품고 있으니
-  -- 기준월로 되돌리려면 그 사이 PL 순이익 누계를 걷어내야 하기 때문입니다.
-  v_total := coalesce(v_retained, 0) - coalesce(v_pl_cum, 0);
+  -- R55(未分配利润)와 R54(本年利润)를 둘 다 더하는 게 맞습니다. 양식상 R54는 독립 가산
+  -- 항목입니다 — 내역 항목에는 전부 "其中："이 붙는데(R49/R50/R53) R54에는 없고,
+  -- 자본총계 항등식이 R56 = R48+R51+R52+R54+R55 입니다.
+  --
+  -- ⚠ 2026-09-21에 이 줄을 v_retained만 쓰도록 바꿨다가 되돌렸습니다. 흥아물류 법인
+  -- 합계만 보면 R54를 더했을 때 자본총계가 안 맞아서 이중계상처럼 보이는데, 지점별로
+  -- 쪼개보면 원인이 다릅니다. 2026-08 기준 16개 지점 중 13곳(YJC 포워딩 12곳 전부 +
+  -- 흥아물류 천진)은 항등식이 정확히 0이고, 흥아물류 상해·연운항·하문 3곳만 R55에
+  -- 당기순이익을 이미 담아서 그 3곳 합(-2,311,373.84)이 법인 전체를 오염시킨 것이었습니다.
+  -- 즉 코드가 아니라 그 3개 지점 입력이 문제입니다. 법인 합계만 보고 판단하지 마세요.
+  v_total := coalesce(v_retained, 0) + coalesce(v_net, 0) - coalesce(v_pl_cum, 0);
 
   v_capital := fund_line_sum(v_corp, null, v_src, 'BS', fund_codes('bsCapital'));
   v_surplus := fund_line_sum(v_corp, null, v_src, 'BS', fund_codes('bsSurplus'));
@@ -622,10 +624,10 @@ begin
     'sourceYearmonth', v_src,        -- 실제로 읽은 BS의 월
     'method', v_method,              -- direct | backcast | nodata
     'accountMissing', v_missing,     -- true면 COA가 바뀌어 계정을 못 찾은 것
-    'retainedCny', v_retained,       -- 미분배이익잉여금 (BS-R55). 당기순이익을 이미 포함합니다
-    'netIncomeCny', v_net,           -- 당기순이익 (BS-R54). 참고 표시용 - 합계에는 더하지 않습니다
+    'retainedCny', v_retained,       -- 미분배이익잉여금 (BS-R55)
+    'netIncomeCny', v_net,           -- 당기순이익 (BS-R54)
     'plCumulativeCny', v_pl_cum,     -- 역산으로 차감한 PL 순이익 누계
-    'dividendAvailableCny', v_total, -- = retained − plCumulative
+    'dividendAvailableCny', v_total, -- = retained + netIncome − plCumulative
     'carryForward', v_carry,         -- carried | not_carried | unknown
     'paidInCapitalCny', v_capital,   -- 납입자본금 (법정적립 한도 판정용 참고)
     'surplusReserveCny', v_surplus   -- 잉여공적금 (동일)
@@ -652,10 +654,10 @@ begin
   select role, branch_scope into v_role, v_branch_scope from verify_access_key(p_access_key);
   v_corp := coalesce(v_branch_scope, p_corp);
 
-  -- bsNetIncome(BS-R54)은 더하지 않습니다. bsRetained(BS-R55)가 이미 포함하고 있어서
-  -- 더하면 당해 이익이 두 번 잡힙니다 (get_dividend_detail의 v_total 주석 참고).
   return coalesce(
     fund_line_sum(v_corp, null, p_yearmonth, 'BS', fund_codes('bsRetained')), 0
+  ) + coalesce(
+    fund_line_sum(v_corp, null, p_yearmonth, 'BS', fund_codes('bsNetIncome')), 0
   );
 end;
 $$;
