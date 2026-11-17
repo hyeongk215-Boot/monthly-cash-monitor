@@ -492,16 +492,21 @@ $$;
 -- 헬퍼(fund_line_sum 등)는 access_key 검사를 하지 않으므로 절대 노출하지 않습니다.
 -- 이미 revoke된 acct_statement_lines를 읽기 때문에, 노출하면 키 없이 재무제표를
 -- 조회할 수 있게 됩니다.
-revoke all on function fund_account_codes() from anon, authenticated;
-revoke all on function fund_codes(text) from anon, authenticated;
-revoke all on function fund_line_sum(text, text, text, text, text[]) from anon, authenticated;
-revoke all on function fund_has_statement(text, text, text, text) from anon, authenticated;
-revoke all on function fund_reconcile_one(text, text, text) from anon, authenticated;
+REVOKE EXECUTE ON FUNCTION fund_prev_yearmonth(text) FROM PUBLIC, anon, authenticated;
+revoke all on function fund_account_codes() from PUBLIC, anon, authenticated;
+revoke all on function fund_codes(text) from PUBLIC, anon, authenticated;
+revoke all on function fund_line_sum(text, text, text, text, text[]) from PUBLIC, anon, authenticated;
+revoke all on function fund_has_statement(text, text, text, text) from PUBLIC, anon, authenticated;
+revoke all on function fund_reconcile_one(text, text, text) from PUBLIC, anon, authenticated;
 
-grant execute on function get_cash_position(text, text, text) to anon, authenticated;
-grant execute on function get_fund_reconciliation(text, text, text[]) to anon, authenticated;
-grant execute on function get_dividend_detail(text, text, text) to anon, authenticated;
-grant execute on function get_dividend_available(text, text, text) to anon, authenticated;
+REVOKE EXECUTE ON FUNCTION get_cash_position(text, text, text) FROM PUBLIC, authenticated;
+GRANT EXECUTE ON FUNCTION get_cash_position(text, text, text) TO anon;
+REVOKE EXECUTE ON FUNCTION get_fund_reconciliation(text, text, text[]) FROM PUBLIC, authenticated;
+GRANT EXECUTE ON FUNCTION get_fund_reconciliation(text, text, text[]) TO anon;
+REVOKE EXECUTE ON FUNCTION get_dividend_detail(text, text, text) FROM PUBLIC, authenticated;
+GRANT EXECUTE ON FUNCTION get_dividend_detail(text, text, text) TO anon;
+REVOKE EXECUTE ON FUNCTION get_dividend_available(text, text, text) FROM PUBLIC, authenticated;
+GRANT EXECUTE ON FUNCTION get_dividend_available(text, text, text) TO anon;
 
 -- =====================================================================
 -- 7. 배포 확인
